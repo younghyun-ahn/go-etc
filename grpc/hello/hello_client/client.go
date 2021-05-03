@@ -5,7 +5,10 @@ import (
 	"github.com/younghyun-ahn/go-etc/grpc/hello/hellopb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"log"
+	"time"
 )
 
 func main() {
@@ -19,7 +22,9 @@ func main() {
 	c := hellopb.NewHelloServiceClient(conn)
 	//fmt.Printf("Created client: %f", c)
 
-	doUnary(c)
+	//doUnary(c)
+	doDeadline(c, 5*time.Second) //should complete
+	doDeadline(c, 1*time.Second) //should timeout
 }
 
 func doUnary(c hellopb.HelloServiceClient) {
@@ -34,4 +39,32 @@ func doUnary(c hellopb.HelloServiceClient) {
 		log.Fatalf("Error while calling Hello RPC: %v", err)
 	}
 	log.Printf("Response from Hello: %v", res.Result)
+}
+
+func doDeadline(c hellopb.HelloServiceClient, timeout time.Duration) {
+	req := &hellopb.HelloWithDeadlineRequest{
+		Hello: &hellopb.Hello{
+			FirstName: "Younghyun",
+			LastName: "Ahn",
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	res, err := c.HelloWithDeadline(ctx, req)
+	if err != nil {
+		statusErr, ok := status.FromError(err)
+		if ok {
+			if statusErr.Code() == codes.DeadlineExceeded {
+				fmt.Println("Timeout was hit! Deadline was exceeded")
+			} else {
+				fmt.Printf("Unexpected error: %v", statusErr)
+			}
+		} else {
+			log.Fatalf("Error while calling Hello RPC: %v", err)
+		}
+		return
+	}
+	log.Printf("Response from Hello: %v", res.Result)
+
 }
